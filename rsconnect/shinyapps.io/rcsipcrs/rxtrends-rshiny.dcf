@@ -1,0 +1,10 @@
+name: rxtrends-rshiny
+title:
+username: rcsipcrs
+account: rcsipcrs
+server: shinyapps.io
+hostUrl: https://api.shinyapps.io/v1
+appId: 13238414
+bundleId: 9688880
+url: https://rcsipcrs.shinyapps.io/rxtrends-rshiny/
+version: 1
