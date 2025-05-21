@@ -1,4 +1,3 @@
-
 #Loading required packages
 library(shiny)
 library(htmltools)
@@ -12,11 +11,15 @@ library(DT)
 library(lubridate)
 library(dplyr)
 library(shinyBS)
+library(tidyr)
 
-# reading dataset
-pcrs_data <- readxl::read_xlsx("PCRS.xlsx")  
+library(purrr)
+# Loading the dataset
+pcrs_data <- readRDS("PCRS.rds")
+#pcrs_data <- read_csv("PCRS.csv")
+#pcrs_data <- readxl::read_xlsx("PCRS.xlsx")  
 
-# Transfer dates to required format
+# rendering the dates intoto required format
 pcrs_data$mth_yr <- as.Date(paste0(pcrs_data$mth_yr, "01"), format = "%Y%m%d")
 pcrs_data$mth_yr <- ymd(pcrs_data$mth_yr)
 pcrs_data$year <- year(pcrs_data$mth_yr)
@@ -45,7 +48,7 @@ ui <- fluidPage(
       }
       .hover-tooltip .tooltip-text {
         visibility: hidden;
-        width: 350px; 
+        width: 300px; 
         background-color: #f9f9f9;
         color: #000000; 
         text-align: left;
@@ -53,8 +56,8 @@ ui <- fluidPage(
         padding: 10px;
         position: absolute;
         z-index: 1000; 
-        bottom: 125%; 
-        left: 50%;
+        bottom: 103%; 
+        left: 33%;
         transform: translateX(-50%);
         opacity: 0;
         transition: opacity 0.3s;
@@ -100,10 +103,107 @@ ui <- fluidPage(
     "))
   ),
   
-  titlePanel("RxTrends"),
+  # App header with description
+  div(
+    class = "app-header",
+    style = "margin-bottom: 20px; padding: 15px; background-color: #f8f9fa; border-radius: 5px;",
+    fluidRow(
+      column(10,
+             titlePanel("RxTrends 2.0"),
+      ),
+      column(2,
+             div(style = "text-align: right;",
+                 actionButton("showHelp", "Help & Documentation", 
+                              class = "btn-info",
+                              style = "margin-top: 20px;")
+             )
+      )
+    )
+  ),
   
-  # Inputs selection dropdown lits
+  # help and documentation
+  bsModal("helpModal", "RxTrends Help & Documentation", "showHelp", size = "large",
+          tabsetPanel(
+            tabPanel("Overview",
+                     h4("About RxTrends 2.0"),
+                     p("RxTrends 2.0 is designed to provide interactive visualisation and analysis of open data from Ireland on primary care prescribing. The tool uses data from the HSE-PCRS monthly datasets of Ireland's General Medical Services (GMS) scheme, Drugs Payment Scheme (DPS), Long-Term Illness (LTI) scheme and High-Tech Drug Scheme (HTS) (available at https://www.sspcrs.ie/portal/annual-reporting/report/pharmacy) to enable dynamic exploration of prescribing patterns."),   
+                     h4("Key Features"),
+                     tags$ul(
+                       tags$li("Interactive visualisation of prescribing trends"),
+                       tags$li("Cost analysis with inflation adjustment"),
+                       tags$li("Scheme eligible population-adjusted prescribing and cost rates for GMS scheme"),
+                       tags$li("Flexible time period selection"),
+                       tags$li("Comparison of metrics across medications, therapeutic groups, and systems")
+                     )
+            ),
+            tabPanel("Using the Tool",
+                     h4("Step-by-Step Guide"),
+                     tags$ol(
+                       tags$li("Choose Scheme, medications, therapeutic groups, and/or physiological systems to analyse"),
+                       tags$li("Select the time period (monthly or yearly)"),
+                       tags$li("Use the comparison feature to analyse relationships between medications/therapeutic groups and therapeutic groups/physiological systems"),
+                       tags$li("Export of selected items data using the download button")
+                     ),
+                     
+                     h4("Tips for Effective Use"),
+                     tags$ul(
+                       tags$li("Begin typing the name of a medication or therapeutic/physiological group in dropdown menus to search and allow for quick selection"),
+                       tags$li("Compare related items to explore proportions"),
+                       tags$li("Switch between original and adjusted costs for different perspectives"),
+                       tags$li("Use the monthly view for detailed patterns and the yearly view for less granular visualisation")
+                     ),
+                     h4("Citing this tool"),
+                     tags$ul(
+                       tags$li("If citing this tool in your work, please include the following reference: Hassan Ali A, Moriarty F. RxTrends: An R-based Shiny Application for Visualising Open Data on Prescribed Medications in Ireland. Zenodo; 2025. https://doi.org/10.5281/zenodo.14726890"),
+                       tags$li("If you would like to get in contact, please feel free to get in touch with us at ahmedhassanali@rcsi.ie and frankmoriarty@rcsi.ie.")
+                     ),
+                     
+            ),
+            tabPanel("Data Structure",
+                     h4("Raw Data"),
+                     p("This data reports on medications (which feature in the top 100 agents reported in the data source per month), and therapeutic groups (i.e. drug classes, categorised by the WHO Anatomical Therapeutic Chemical (ATC) second-level code. In addition, monthly data on the number of persons eligible for the GMS scheme are available from the same source)."),  
+                     h4("Output Specifications"),
+                     p("The tool generates the following types of outputs, with up to 5 tabs and statistical summaries. Each tab includes analysis of a different metric: prescribing frequency, cost, cost per prescribing, prescribing rate per 1,000 GMS eligible persons (if GMS scheme is selected), and cost rate per 1,000 GMS eligible persons (if GMS scheme is selected):"),
+                     tags$ul(
+                       tags$li(strong("Prescribing Frequency:"), " It is the number of times a medicine was dispensed per month, and corresponds to the variable “Prescribing Frequency” in the source data."),
+                       tags$li(strong("Cost Analysis:"), " It is the total ingredient costs of dispensing of a medicine in euro and corresponds to the variable “Ingredient Cost” in the source file."),
+                       tags$li(strong("Cost per prescribing:"), " It is the mean ingredient cost per dispensing of a medicine, and is derived by dividing the ”Ingredient Cost” variable by the ”Prescribing Frequency” variable in the source data."),
+                       tags$li(strong("Prescribing rate and Cost rate:"), " are the number of dispensing/ingredient cost of a medicine per 1,000 GMS eligible persons. They are derived by dividing the “Prescribing Frequency” or “Ingredient Cost” variables by the number of GMS eligible persons and multiplying by 1,000. These are only available for the GMS scheme data, as other schemes’ eligibility data do not allow reliable interpretation of rates."),
+                       tags$li(strong("Statistical Measures:"), " Maximum, minimum, median, and IQR for selected metrics")
+                     ),
+                     p("The downloadable datasets are provided in Comma Separated Values (.csv) format, including the following fields:"),
+                     tags$ul(
+                       tags$li(strong("name (String):"), "The name of the selected medication(s), therapeutic group(s), or system(s) with corresponding ATC code between brackets (e.g., Ranitidine (A02BA02))."),
+                       tags$li(strong("Prescribing_Frequency (Float):"), "The number of prescription items dispensed during the selected period."),
+                       tags$li(strong("Ingredient Cost € (Float):"), "The total ingredient cost (€) associated with the dispensed prescriptions."),
+                       tags$li(strong("Prescribing Unit Cost € (Float):"), "The average ingredient cost per prescribing event (€)."),
+                       tags$li(strong("dispensing_rate_per_1000 (Float):"), "The rate of prescribing frequency normalized per 1,000 GMS eligible patients in the selected period."),
+                       tags$li(strong("cost_rate_per_1000 (Float):"), "The rate of ingredient cost normalized per 1,000 GMS eligible patients in the selected period."),
+                       tags$li(strong("Date (YYYY-MM format):"), "The month or year associated with the data point."),
+                       tags$li(strong("CPIallitems (Float):"), "The Consumer Price Index (CPI) for all items during the selected period relative to October 2024, representing general inflation at that time (baseline = 100)."),
+                       tags$li(strong("Adjusted_Ingredient Cost € (Float):"), "The total ingredient cost (€) adjusted for inflation using the CPI."),
+                       tags$li(strong("adjusted_Prescribing Unit Cost € (Float):"), "The average ingredient cost per prescribing event (€) after adjusting for inflation using the CPI."),
+                       tags$li(strong("adjusted_cost_rate_per_1000 (Float):"), "The inflation-adjusted rate of ingredient cost normalized per 1,000 GMS eligible patients in the selected period.")
+                       
+                     ),    
+                     
+            )
+            
+            
+            
+            
+          )
+  ),
+  
+  
   fluidRow(
+    column(1,  
+           selectizeInput("selectedScheme", "Scheme:",
+                          choices = c("GMS", "LTI", "DPS", "HTS"),  
+                          selected = "GMS",
+                          multiple = FALSE,
+                          options = list(placeholder = "Select a Scheme")
+           )),
     column(3, 
            selectizeInput("selectedMedication", "Medication:",
                           choices = NULL, 
@@ -112,7 +212,7 @@ ui <- fluidPage(
                           options = list(placeholder = "Type or select")
            )
     ),
-    column(3, 
+    column(3,  
            selectizeInput("selectedATC", "Therapeutic Group:",
                           choices = NULL,  
                           selected = NULL,
@@ -120,7 +220,7 @@ ui <- fluidPage(
                           options = list(placeholder = "Type or select")
            )
     ),
-    column(3, 
+    column(3,  
            selectizeInput("selectedSystem", "System:",
                           choices = NULL,  
                           selected = NULL,
@@ -128,16 +228,20 @@ ui <- fluidPage(
                           options = list(placeholder = "Type or select")
            )
     ),
-    column(3,
+    column(2,
            div(class = "hover-tooltip",
-               actionButton("compareButton", "Compare Selected", class = "btn-primary", style = "width:100%; margin-top: 20px;"),
+               actionButton("compareButton", "Compare Selected", 
+                            class = "btn-primary", 
+                            style = "width:100%; margin-top: 20px; padding: 8px 12px;"), 
                span(class = "tooltip-text", textOutput("infoText"))
            ),
            div(style = "margin-top: 10px;",
-               actionButton("clearButton", "Clear Selected", class = "btn-warning", style = "width:55%; font-size:15px; padding:5px 10px;"))
+               actionButton("clearButton", "Clear Selected", 
+                            class = "btn-warning", 
+                            style = "width:69%; padding: 8px 12px;")
+           )
     )
   ),
-  
   # Input of Date 
   fluidRow(
     column(3,
@@ -150,8 +254,8 @@ ui <- fluidPage(
              condition = "input.dateInputType == 'slider'",
              sliderInput("dateRange", "",
                          min = as.Date("2016-01-01"),
-                         max = as.Date("2024-10-01"),
-                         value = c(as.Date("2016-01-01"), as.Date("2024-10-01")),
+                         max = as.Date("2024-12-01"),
+                         value = c(as.Date("2016-01-01"), as.Date("2024-12-01")),
                          timeFormat = "%b %Y",  
                          step = 1,  
                          width = '70%')  
@@ -172,63 +276,64 @@ ui <- fluidPage(
     
   ),
   
-  # Output Tabs
-  tabsetPanel(type = "tabs",
-              tabPanel(
-                HTML('<div style="display: flex; align-items: center;">Prescribing Frequency <div class="hover-tooltip"><span class="info-icon">i</span><span class="tooltip-text">Prescribing frequency is the number of times a medicine was dispensed per month or year (i.e. based on your selection). Max, Min, Median, and IQR are the statistical measures across the selected period.</span></div></div>'),
-                plotlyOutput("DispensingPlot"), 
-                dataTableOutput("DispensingStats"),
-                uiOutput("dispensingDesc")
-              ),
-              tabPanel(
-                HTML('<div style="display: flex; align-items: center;">Cost <div class="hover-tooltip"><span class="info-icon">i</span><span class="tooltip-text">Cost refers to the cost in euros (€) for the prescribed items per month or year (i.e., based on your selection). Use the toggle button above to switch to cost data adjusted for inflation, based on the consumer price index of April 2024. Max, Min, Median, and IQR are the statistical measures across the selected period.</span></div></div>'),
-                
-                div(class = "hover-tooltip",
-                    actionButton("toggleCost", "Switch to Adjusted Cost", style = "background-color: #dc3545; color: white;"),
-                    span(class = "tooltip-text", 
-                         id = "toggleCost_tooltip",  
-                         "Costs are adjusted for inflation using the monthly Consumer Price Index (CPI), normalised to the most recent month in the data (i.e., July 2024). For more information, visit: https://visual.cso.ie/?body=entity/cpicalculator")
-                ),
-                
-                plotlyOutput("costPlot"), 
-                dataTableOutput("costStats"),
-                uiOutput("costDesc")
-              ),
-              tabPanel(
-                HTML('<div style="display: flex; align-items: center;">Cost Per Prescribing <div class="hover-tooltip"><span class="info-icon">i</span><span class="tooltip-text">Cost Per Prescribing is the average cost in euros (€) per dispensing of an item per month or year (i.e., based on your selection). Use the toggle button above to switch to cost per prescribing data adjusted for inflation, based on the consumer price index of April 2024. Max, Min, Median, and IQR are the statistical measures across the selected period.</span></div></div>'),
-                
-                div(class = "hover-tooltip",
-                    actionButton("toggleUnitCost", "Switch to Adjusted Cost Per Prescribing", style = "background-color: #dc3545; color: white;"),
-                    span(class = "tooltip-text", 
-                         id = "toggleUnitCost_tooltip",  
-                         "Costs are adjusted for inflation using the monthly Consumer Price Index (CPI), normalised to the most recent month in the data (i.e., July 2024). For more information, visit: https://visual.cso.ie/?body=entity/cpicalculator")
-                ),
-                
-                plotlyOutput("unitcostPlot"), 
-                dataTableOutput("unitcostStats"),
-                uiOutput("unitcostDesc")
-              ),
-              tabPanel(
-                HTML('<div style="display: flex; align-items: center;">Prescribing rate <div class="hover-tooltip"><span class="info-icon">i</span><span class="tooltip-text">Prescribing rate is the rate of prescriptions of an item per 1000 eligible persons per month or year (i.e. based on your selection). Max, Min, Median, and IQR are the statistical measures across the selected period.</span></div></div>'),
-                plotlyOutput("freqratetPlot"), 
-                dataTableOutput("freqratetStats"),
-                uiOutput("freqratetDesc")
-              ),
-              tabPanel(
-                HTML('<div style="display: flex; align-items: center;">Cost Rate <div class="hover-tooltip"><span class="info-icon">i</span><span class="tooltip-text">Cost rate is the cost rate of an item per 1000 eligible persons in euros (€). Use the toggle button above to switch to cost rate data adjusted for inflation, based on the consumer price index of April 2024. Max, Min, Median, and IQR are the statistical measures across the selected period.</span></div></div>'),
-                
-                div(class = "hover-tooltip",
-                    actionButton("toggleCostRate", "Switch to Adjusted Cost Rate", style = "background-color: #dc3545; color: white;"),
-                    span(class = "tooltip-text", 
-                         id = "toggleCostRate_tooltip",  
-                         "Costs are adjusted for inflation using the monthly Consumer Price Index (CPI), normalised to the most recent month in the data (i.e., July 2024). For more information, visit: https://visual.cso.ie/?body=entity/cpicalculator")
-                ),
-                
-                plotlyOutput("costratetPlot"), 
-                dataTableOutput("costratetStats"),
-                uiOutput("costratetDesc")
-              )
+  
+  # Output Tab panels
+  tabsetPanel(
+    type = "tabs",
+    id = "mainTabs",  
+    tabPanel(
+      HTML('<div style="display: flex; align-items: center;">Prescribing Frequency <div class="hover-tooltip"><span class="info-icon">i</span><span class="tooltip-text">Prescribing frequency is the number of times a medicine was dispensed per month or year (i.e. based on your selection). Max, Min, Median, and IQR are the statistical measures across the selected period.</span></div></div>'),
+      plotlyOutput("DispensingPlot"), 
+      dataTableOutput("DispensingStats"),
+      uiOutput("dispensingDesc")
+    ),
+    tabPanel(
+      HTML('<div style="display: flex; align-items: center;">Cost <div class="hover-tooltip"><span class="info-icon">i</span><span class="tooltip-text">Cost refers to the cost in euros (€) for the prescribed items per month or year (i.e., based on your selection). Use the toggle button above to switch to cost data adjusted for inflation, based on the consumer price index of December 2024. Max, Min, Median, and IQR are the statistical measures across the selected period.</span></div></div>'),
+      div(class = "hover-tooltip",
+          actionButton("toggleCost", "Switch to Adjusted Cost", style = "background-color: #dc3545; color: white;"),
+          span(class = "tooltip-text", 
+               id = "toggleCost_tooltip",  
+               "Costs are adjusted for inflation using the monthly Consumer Price Index (CPI), normalised to the most recent month in the data (i.e., December 2024). For more information, visit: https://visual.cso.ie/?body=entity/cpicalculator")
+      ),
+      plotlyOutput("costPlot"), 
+      dataTableOutput("costStats"),
+      uiOutput("costDesc")
+    ),
+    tabPanel(
+      HTML('<div style="display: flex; align-items: center;">Cost Per Prescribing <div class="hover-tooltip"><span class="info-icon">i</span><span class="tooltip-text">Cost Per Prescribing is the average cost in euros (€) per dispensing of an item per month or year (i.e., based on your selection). Use the toggle button above to switch to cost per prescribing data adjusted for inflation, based on the consumer price index of December 2024. Max, Min, Median, and IQR are the statistical measures across the selected period.</span></div></div>'),
+      div(class = "hover-tooltip",
+          actionButton("toggleUnitCost", "Switch to Adjusted Cost Per Prescribing", style = "background-color: #dc3545; color: white;"),
+          span(class = "tooltip-text", 
+               id = "toggleUnitCost_tooltip",  
+               "Costs are adjusted for inflation using the monthly Consumer Price Index (CPI), normalised to the most recent month in the data (i.e., December 2024). For more information, visit: https://visual.cso.ie/?body=entity/cpicalculator")
+      ),
+      plotlyOutput("unitcostPlot"), 
+      dataTableOutput("unitcostStats"),
+      uiOutput("unitcostDesc")
+    ),
+    
+    tabPanel(
+      HTML('<div style="display: flex; align-items: center;">Prescribing rate <div class="hover-tooltip"><span class="info-icon">i</span><span class="tooltip-text">Prescribing rate is the rate of prescriptions of an item per 1000 eligible persons per month or year (i.e. based on your selection). Max, Min, Median, and IQR are the statistical measures across the selected period.</span></div></div>'),
+      plotlyOutput("freqratetPlot"), 
+      dataTableOutput("freqratetStats"),
+      uiOutput("freqratetDesc")
+    ),
+    tabPanel(
+      HTML('<div style="display: flex; align-items: center;">Cost Rate <div class="hover-tooltip"><span class="info-icon">i</span><span class="tooltip-text">Cost rate is the cost rate of an item per 1000 eligible persons in euros (€). Use the toggle button above to switch to cost rate data adjusted for inflation, based on the consumer price index of December 2024. Max, Min, Median, and IQR are the statistical measures across the selected period.</span></div></div>'),
+      div(class = "hover-tooltip",
+          actionButton("toggleCostRate", "Switch to Adjusted Cost Rate", style = "background-color: #dc3545; color: white;"),
+          span(class = "tooltip-text", 
+               id = "toggleCostRate_tooltip",  
+               "Costs are adjusted for inflation using the monthly Consumer Price Index (CPI), normalised to the most recent month in the data (i.e., December 2024). For more information, visit: https://visual.cso.ie/?body=entity/cpicalculator")
+      ),
+      plotlyOutput("costratetPlot"), 
+      dataTableOutput("costratetStats"),
+      uiOutput("costratetDesc")
+      
+    )
   ),
+  
+  
   
   # Download button for filtered dataset
   fluidRow(
@@ -236,28 +341,57 @@ ui <- fluidPage(
            downloadButton("downloadData", "Download Filtered Data", class = "btn-success", style = "width:100%;"))
   ),
   
-  # Zoom and Filter Descriptions
+  
   fluidRow(
     column(12, uiOutput("plotControlsDesc"))
   )
 )
+# debuging 
+textOutput("debugInfo")
+
+
+
 # Server logic
 server <- function(input, output, session) {
   
+  # show & hide tab panel based on seleceted schemes 
+  shinyjs::hide(selector = "#mainTabs li:nth-child(4)")  
+  shinyjs::hide(selector = "#mainTabs li:nth-child(5)")  
+  
+  observeEvent(input$selectedScheme, {
+    if (input$selectedScheme == "GMS") {
+      
+      shinyjs::show(selector = "#mainTabs li:nth-child(4)") 
+      shinyjs::show(selector = "#mainTabs li:nth-child(5)") 
+    } else {
+      
+      shinyjs::hide(selector = "#mainTabs li:nth-child(4)")  
+      shinyjs::hide(selector = "#mainTabs li:nth-child(5)")  
+      
+      
+      if (input$mainTabs %in% c("Prescribing rate", "Cost Rate")) {
+        updateTabsetPanel(session, "mainTabs", selected = "Prescribing Frequency")
+      }
+    }
+  }, ignoreInit = FALSE)  # Ensure this runs when the app starts
+  
+  
+  
   # Reactive values to store the current selections
-  storedSelections <- reactiveValues(selectedMedication = NULL, selectedATC = NULL, selectedSystem = NULL, dateRange = NULL, yearRange = c(2016, 2024))
+  storedSelections <- reactiveValues(selectedMedication = NULL, selectedATC = NULL, selectedSystem = NULL, selectedScheme = NULL, dateRange = NULL, yearRange = c(2016, 2024))
   
   
-  # Prevent unncessary updates of selectize inputs
+  
+  
+  # Update selected inputs based on current data sorting and filtering
   observe({
+    filtered_data <- pcrs_data %>%
+      filter(Scheme == input$selectedScheme) %>%
+      arrange(`ATC code`)
     
-    data_sorted <- pcrs_data %>% arrange(`ATC code`)
-    
-    
-    med_choices <- unique(data_sorted$name[data_sorted$Type == "Medication"])
-    atc_choices <- unique(data_sorted$name[data_sorted$Type == "ATC"])
-    system_choices <- unique(data_sorted$name[data_sorted$Type == "System"])
-    
+    med_choices <- unique(filtered_data$name[filtered_data$Type == "Medication"])
+    atc_choices <- unique(filtered_data$name[filtered_data$Type == "ATC"])
+    system_choices <- unique(filtered_data$name[filtered_data$Type == "System"])
     
     isolate({
       updateSelectizeInput(session, "selectedMedication", choices = med_choices, selected = storedSelections$selectedMedication)
@@ -266,54 +400,39 @@ server <- function(input, output, session) {
     })
   })
   
-  # Handling the toggleCost option 
+  # Respond to Scheme selection changes
+  observeEvent(input$selectedScheme, {
+    updateSelectizeInput(session, "selectedScheme", selected = input$selectedScheme)
+    storedSelections$selectedScheme <- input$selectedScheme
+  })
+  
+  # Toggle cost, unit cost & cost rates and adjust UI based on the selection
   observeEvent(input$toggleCost, {
-    
-    if (input$toggleCost %% 2 == 1) {  
-      runjs("$('#toggleCost').text('Switch to Original Cost').css({'background-color': '#28a745', 'color': 'white'});")
-      shinyjs::show("toggleCost_tooltip")  
-    } else { 
-      runjs("$('#toggleCost').text('Switch to Adjusted Cost').css({'background-color': '#dc3545', 'color': 'white'});")
-      shinyjs::hide("toggleCost_tooltip") 
-    }
+    shinyjs::toggle(input$toggleCost %% 2 == 0, "toggleCost_tooltip")
+    new_label <- ifelse(input$toggleCost %% 2 == 0, "Switch to Adjusted Cost", "Switch to Original Cost")
+    updateActionButton(session, "toggleCost", label = new_label)
   })
-  #  Handling the "Cost Per Prescribing" option
+  
+  
   observeEvent(input$toggleUnitCost, {
-    
-    if (input$toggleUnitCost %% 2 == 1) {  
-      runjs("$('#toggleUnitCost').text('Switch to Original Cost Per Prescribing').css({'background-color': '#28a745', 'color': 'white'});")
-      shinyjs::show("toggleUnitCost_tooltip") 
-    } else { 
-      runjs("$('#toggleUnitCost').text('Switch to Adjusted Cost Per Prescribing').css({'background-color': '#dc3545', 'color': 'white'});")
-      shinyjs::hide("toggleUnitCost_tooltip") 
-    }
+    shinyjs::toggle(input$toggleUnitCost %% 2 == 0, "toggleUnitCost_tooltip")
+    new_label <- ifelse(input$toggleUnitCost %% 2 == 0, "Switch to Adjusted Cost Per Prescribing", "Switch to Original Cost Per Prescribing")
+    updateActionButton(session, "toggleUnitCost", label = new_label)
   })
   
-  #  Handling the "Cost Rate" option
+  
   observeEvent(input$toggleCostRate, {
-    
-    if (input$toggleCostRate %% 2 == 1) {  
-      runjs("$('#toggleCostRate').text('Switch to Original Cost Rate').css({'background-color': '#28a745', 'color': 'white'});")
-      shinyjs::show("toggleCostRate_tooltip")  
-    } else {  
-      runjs("$('#toggleCostRate').text('Switch to Adjusted Cost Rate').css({'background-color': '#dc3545', 'color': 'white'});")
-      shinyjs::hide("toggleCostRate_tooltip")  
-    }
+    shinyjs::toggle(input$toggleCostRate %% 2 == 0, "toggleCostRate_tooltip")
+    new_label <- ifelse(input$toggleCostRate %% 2 == 0, "Switch to Adjusted Cost Rate", "Switch to Original Cost Rate")
+    updateActionButton(session, "toggleCostRate", label = new_label)
   })
   
-  #Improving triggering on initialization and reasctivity 
-  
-  observeEvent(input$selectedMedication, { storedSelections$selectedMedication <- input$selectedMedication }, ignoreInit = TRUE)
-  observeEvent(input$selectedATC, { storedSelections$selectedATC <- input$selectedATC }, ignoreInit = TRUE)
-  observeEvent(input$selectedSystem, { storedSelections$selectedSystem <- input$selectedSystem }, ignoreInit = TRUE)
-  observeEvent(input$dateRange, { storedSelections$dateRange <- input$dateRange }, ignoreInit = TRUE)
-  observeEvent(input$yearRange, { storedSelections$yearRange <- input$yearRange }, ignoreInit = TRUE)
-  
-  
+  # Clear all selections
   observeEvent(input$clearButton, {
     storedSelections$selectedMedication <- NULL
     storedSelections$selectedATC <- NULL
     storedSelections$selectedSystem <- NULL
+    storedSelections$selectedScheme <- NULL
     storedSelections$dateRange <- c(min(pcrs_data$mth_yr), max(pcrs_data$mth_yr))
     storedSelections$yearRange <- c(2016, 2024)
     
@@ -321,17 +440,19 @@ server <- function(input, output, session) {
       updateSelectizeInput(session, "selectedMedication", selected = character(0))
       updateSelectizeInput(session, "selectedATC", selected = character(0))
       updateSelectizeInput(session, "selectedSystem", selected = character(0))
+      updateSelectizeInput(session, "selectedScheme", selected = NULL)
     })
     
-    #Handling dates on curves 
     updateRadioButtons(session, "dateInputType", selected = "slider")
     updateSliderInput(session, "dateRange", min = min(pcrs_data$mth_yr), max = max(pcrs_data$mth_yr), value = c(min(pcrs_data$mth_yr), max(pcrs_data$mth_yr)), timeFormat = "%b %Y")
     updateSliderInput(session, "yearRange", value = c(2016, 2024))
   })
   
-  
+  # Filter data based on Scheme and other criteria
   filteredData <- reactive({
-    data <- pcrs_data
+    data <- pcrs_data %>%
+      filter(Scheme == input$selectedScheme)
+    
     
     if (input$dateInputType == "slider") {
       start_date <- floor_date(input$dateRange[1], "month")
@@ -360,6 +481,8 @@ server <- function(input, output, session) {
     
     return(data_filtered)
   })
+  
+  
   
   #logic for "Compare" option
   comparisonTrigger <- reactiveVal(FALSE)
@@ -413,6 +536,9 @@ server <- function(input, output, session) {
     updateActionButton(session, "compareButton", label = "Compare Selected")
   })
   
+  output$debugInfo <- renderText({
+    paste("Selected scheme:", input$selectedScheme)
+  })
   
   output$infoText <- renderText({
     medCount <- length(input$selectedMedication)
@@ -556,7 +682,6 @@ server <- function(input, output, session) {
         if (comparisonTrigger() && totalSelections == 2 && (medCount <= 1) && (atcCount <= 1) && (systemCount <= 1)) {
           merge_by <- if (input$dateInputType == "slider") "mth_yr" else "year"
           
-          
           if (medCount == 1 && atcCount == 1 && systemCount == 0) {
             data1 <- filteredData() %>% filter(name == input$selectedMedication & Type == "Medication")
             data2 <- filteredData() %>% filter(name == input$selectedATC & Type == "ATC")
@@ -573,10 +698,8 @@ server <- function(input, output, session) {
             return(plotly_empty())  
           }
           
-          
           if (nrow(data1) == 0 || nrow(data2) == 0) {
             empty_data_name <- if (nrow(data1) == 0) input$selectedMedication else if (nrow(data2) == 0) input$selectedATC else input$selectedSystem
-            
             
             message <- if (input$dateInputType == "slider") {
               sprintf("No data is available for the selected item: <b><i>%s</i></b> for the period <b><i>%s to %s</i></b>.",
@@ -585,7 +708,6 @@ server <- function(input, output, session) {
               sprintf("No data is available for the selected item: <b><i>%s</i></b> for the period <b><i>%d to %d</i></b>.",
                       empty_data_name, start_year, end_year)
             }
-            
             
             return(plotly_empty() %>%
                      layout(
@@ -614,43 +736,108 @@ server <- function(input, output, session) {
                      ))
           }
           
-          if (input$dateInputType != "slider") {  
-            count_data1 <- data1 %>% 
-              group_by(year) %>% 
-              summarize(n = n())
+          if (input$dateInputType != "slider") {
+            # Get all years in the selected range
+            all_years <- seq(input$yearRange[1], input$yearRange[2])
             
-            count_data2 <- data2 %>% 
-              group_by(year) %>% 
-              summarize(n = n())
+            # Determine selected items
+            med_selected <- input$selectedMedication
+            atc_selected <- input$selectedATC
+            system_selected <- input$selectedSystem
             
+            # Load data for selected categories
+            original_data1 <- NULL
+            original_data2 <- NULL
+            original_data3 <- NULL
             
-            combined_counts <- full_join(count_data1, count_data2, by = "year", suffix = c("_1", "_2"))
-            combined_counts[is.na(combined_counts)] <- 0  
+            if (!is.null(med_selected) && !is.null(atc_selected)) {
+              original_data1 <- pcrs_data %>%
+                filter(Scheme == input$selectedScheme,
+                       name == med_selected,
+                       Type == "Medication",
+                       year >= input$yearRange[1],
+                       year <= input$yearRange[2])
+              
+              original_data2 <- pcrs_data %>%
+                filter(Scheme == input$selectedScheme,
+                       name == atc_selected,
+                       Type == "ATC",
+                       year >= input$yearRange[1],
+                       year <= input$yearRange[2])
+              
+            } else if (!is.null(med_selected) && !is.null(system_selected)) {
+              original_data1 <- pcrs_data %>%
+                filter(Scheme == input$selectedScheme,
+                       name == med_selected,
+                       Type == "Medication",
+                       year >= input$yearRange[1],
+                       year <= input$yearRange[2])
+              
+              original_data2 <- pcrs_data %>%
+                filter(Scheme == input$selectedScheme,
+                       name == system_selected,
+                       Type == "System",
+                       year >= input$yearRange[1],
+                       year <= input$yearRange[2])
+              
+            } else if (!is.null(atc_selected) && !is.null(system_selected)) {
+              original_data1 <- pcrs_data %>%
+                filter(Scheme == input$selectedScheme,
+                       name == atc_selected,
+                       Type == "ATC",
+                       year >= input$yearRange[1],
+                       year <= input$yearRange[2])
+              
+              original_data2 <- pcrs_data %>%
+                filter(Scheme == input$selectedScheme,
+                       name == system_selected,
+                       Type == "System",
+                       year >= input$yearRange[1],
+                       year <= input$yearRange[2])
+            }
             
+            # Count data per year
+            count_data1 <- original_data1 %>% count(year, name = "count1")
+            count_data2 <- original_data2 %>% count(year, name = "count2")
             
-            if (any(combined_counts$n_1 != combined_counts$n_2)) {
+            # Create base comparison
+            comparison <- tibble(year = all_years) %>%
+              left_join(count_data1, by = "year") %>%
+              left_join(count_data2, by = "year") %>%
+              mutate(
+                count1 = ifelse(is.na(count1), 0, count1),
+                count2 = ifelse(is.na(count2), 0, count2),
+                mismatch = (count1 != count2) & (count1 > 0) & (count2 > 0),
+                lower_count_item = case_when(
+                  count1 < count2 ~ if (!is.null(med_selected)) med_selected else atc_selected,
+                  count2 < count1 ~ if (!is.null(atc_selected)) atc_selected else system_selected,
+                  TRUE ~ NA_character_
+                )
+              )
+            
+            # Collect mismatch info
+            mismatch_info <- comparison %>%
+              filter(mismatch) %>%
+              group_by(lower_count_item) %>%
+              summarize(years = list(year), .groups = "drop")
+            
+            if (nrow(mismatch_info) > 0) {
               show_warning <- TRUE
-              differing_years <- combined_counts$year[combined_counts$n_1 != combined_counts$n_2]
-              
-              
-              correct_year <- differing_years[1]
-              
-              
-              if (input$dateInputType != "slider") {
-                correct_year <- correct_year - 1
-              }
+              years_list <- mismatch_info %>%
+                mutate(years_str = map_chr(years, ~paste(sort(.), collapse = ", "))) %>%
+                pull(years_str) %>%
+                paste(collapse = "; ")
               
               warning_message <- sprintf(
-                "Check monthly trends; '%s' number of records in year %d don’t match the comparator's.",
-                ifelse(any(combined_counts$n_1 != combined_counts$n_2), input$selectedMedication, input$selectedATC),
-                correct_year
+                "Check monthly trends; '%s' number of records in year(s) %s don't match the comparator's.",
+                mismatch_info$lower_count_item[1],
+                years_list
               )
             }
+            
           }
-          
-          
           combined_data <- merge(data1, data2, by = merge_by, suffixes = c(".1", ".2"))
-          combined_data$ratio <- combined_data[[paste(columnName, "1", sep = ".")]] / combined_data[[paste(columnName, "2", sep = ".")]]
+          combined_data$Proportion <- combined_data[[paste(columnName, "1", sep = ".")]] / combined_data[[paste(columnName, "2", sep = ".")]]
           
           
           x_axis <- if (merge_by == "year") as.factor(combined_data$year) else combined_data$mth_yr
@@ -658,11 +845,11 @@ server <- function(input, output, session) {
           if (plot_type == "bar") {
             p <- ggplot(combined_data, aes(
               x = x_axis,
-              y = ratio,
+              y = Proportion,
               fill = name,
               text = paste(
                 date_label, ":", if (merge_by == "mth_yr") format(!!sym(merge_by), "%b %Y") else !!sym(merge_by),
-                "<br>Ratio:", round(ratio, 3)
+                "<br>Proportion:", round(Proportion, 3)
               )
             )) +
               geom_bar(stat = "identity", width = 0.2) +
@@ -674,15 +861,15 @@ server <- function(input, output, session) {
               theme_minimal() +
               scale_y_continuous(labels = scales::comma, expand = c(0, 0)) +
               expand_limits(y = 0)
-            theme(aspect.ratio = 1/2)  
+            theme(aspect.Proportion = 1/2)  
           } else {
             p <- ggplot(combined_data, aes(
               x = x_axis,
-              y = ratio,
+              y = Proportion,
               group = 1,
               text = paste(
                 date_label, ":", if (merge_by == "mth_yr") format(!!sym(merge_by), "%b %Y") else !!sym(merge_by),
-                "<br>Ratio:", round(ratio, 3)
+                "<br>Proportion:", round(Proportion, 3)
               )
             )) +
               geom_line(linewidth = 0.5) +
@@ -904,11 +1091,12 @@ server <- function(input, output, session) {
     })
   }
   
-  #executing file based on download option
+  
+  # download option
   
   output$downloadData <- downloadHandler(
     filename = function() {
-      paste("filtered-data-", Sys.Date(), ".xlsx", sep = "")
+      paste("filtered-data-", Sys.Date(), ".csv", sep = "")
     },
     content = function(file) {
       if (comparisonTrigger()) {
@@ -925,11 +1113,11 @@ server <- function(input, output, session) {
         combined_data$`Proportion of Prescribing rates` <- combined_data[[paste("dispensing_rate_per_1000", "1", sep = ".")]] / combined_data[[paste("dispensing_rate_per_1000", "2", sep = ".")]]
         combined_data$`Proportion of Cost rates` <- combined_data[[paste("cost_rate_per_1000", "1", sep = ".")]] / combined_data[[paste("cost_rate_per_1000", "2", sep = ".")]]
         
-        
-        openxlsx::write.xlsx(combined_data, file)
+        # Save as CSV
+        write.csv(combined_data, file, row.names = FALSE)
       } else {
-        
-        openxlsx::write.xlsx(filteredData(), file)
+        # Save the filtered data as CSV
+        write.csv(filteredData(), file, row.names = FALSE)
       }
     }
   )
